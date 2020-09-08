@@ -1,0 +1,304 @@
+Cloud Storage
+
+Objectives
+In this lab, you learn how to perform the following tasks:
+
+Create and use buckets
+
+Set access control lists to restrict access
+
+Use your own encryption keys
+
+Implement version controls
+
+Use directory synchronization
+
+Share a bucket across projects using IAM
+
+Task 1: Preparation
+
+# Create bucket
+    gsutil mb gs://[BUCKET_NAME_1]
+
+# Store [BUCKET_NAME_1] in an environment variable
+    export BUCKET_NAME_1=[BUCKET_NAME_1]
+
+# Verify
+    echo BUCKET_NAME_1
+
+# Download a sample file to use 
+    curl \
+    http://hadoop.apache.org/docs/current/\
+    hadoop-project-dist/hadoop-common/\
+    ClusterSetup.html > setup.html  
+
+# Make copies of the file
+    cp setup.html setup2.html
+    cp setup.html setup3.html
+
+Task 2: Access control lists (ACLs)
+
+# Copy the first file to the bucket
+    gsutil cp setup.html gs://$BUCKET_NAME_1
+
+# Get the default access list that's been assigned to setup.html
+        gsutil acl get gs://$BUCKET_NAME_1/setup.html > acl.txt
+        cat acl.txt
+
+ # Set the access list to private and verify the results
+    gsutil set private gs://$BUCKET_NAME_1/setup.html
+    gsutil acl get gs://$BUCKET_NAME_1/setup.html > acl.txt
+    cat acl.txt
+
+# Update the access list to make the file publicly readable
+    gsutil acl ch -u AllUsers:R gs://$BUCKET_NAME_1/setup.html
+    gsutil acl get gs://$BUCKET_NAME_1/setup.html > acl.txt
+    cat acl.txt    
+
+# Delete the setup file
+    rm setup.html
+    ls 
+
+# Copy the file from the bucket 
+    gsutil cp gs://$BUCKET_NAME_1/setup.html setup.html
+
+Task 3: Customer-supplied encryption keys (CSEK)
+
+# Generate a CSEK key
+    python3 -c 'import base64; import os; print(base64.encodebytes(os.urandom(32)))'
+
+# Open the boto file
+    ls -al
+
+    nano .boto
+
+    encryption_key=Csek key 
+    Ctrl+o Enter, Ctrl+x
+
+# Upload the remaining setup.html files
+    gsutil cp setup2.html gs://$BUCKET_NAME_1/
+    gsutil cp setup3.htm gs://$BUCKET_NAME_1/
+
+# Verify that setup2.html and setup3.html are there
+    gsutil ls gs://$BUCKET_NAME_1
+
+# Delete  local files
+    rm setup*
+
+# Copy the files from the bucket again
+    gsutil cp gs://$BUCKET_NAME_1/setup*
+
+# Cat the encrypted files
+    cat setup.html
+    cat setup2.html
+    cat setup3.html
+
+Task 4: Rotate CSEK keys
+
+# Open the .boto
+    nano .boto
+
+    Make these changes to the .boto file
+    Before:
+    encryption_key=2dFWQGnKhjOcz4h0CudPdVHLG2g+OoxP8FQOIKKTzsg=
+
+    # decryption_key1=
+    After:
+    # encryption_key=2dFWQGnKhjOcz4h0CudPdVHLG2g+OoxP8FQOIKKTzsg=
+
+    decryption_key1=2dFWQGnKhjOcz4h0CudPdVHLG2g+OoxP8FQOIKKTzsg=
+
+    Ctrl+o Enter, Ctrl+x
+
+#Generate another CSEK key and add to the boto file
+    python3 -c 'import base64; import os; print(base64.encodebytes(os.urandom(32)))'
+
+# Open the boto file
+    nano .boto
+
+    Make these changes to the .boto file
+    Before:
+    # encryption_key=2dFWQGnKhjOcz4h0CudPdVHLG2g+OoxP8FQOIKKTzsg=
+
+    After:
+    encryption_key=HbFK4I8CaStcvKKIx6aNpdTse0kTsfZNUjFpM+YUEjY= 
+
+    Ctrl+o Enter clrl+x
+
+#Rewrite the key for file 1 and comment out the old decrypt key
+    gsutil rewirte -k gs://BUCKET_NAME_1/setup2.html
+# Open the boto file
+    nano .boto
+
+    Make these changes to the .boto file 
+    Before:
+    decryption_key1=2dFWQGnKhjOcz4h0CudPdVHLG2g+OoxP8FQOIKKTzsg=
+
+    After:
+    # decryption_key1=2dFWQGnKhjOcz4h0CudPdVHLG2g+OoxP8FQOIKKTzsg=
+
+# Download setup 2 and setup3
+    gsutil cp  gs://$BUCKET_NAME_1/setup2.html recover2.html
+
+    gsutil cp  gs://$BUCKET_NAME_1/setup3.html recover3.html
+
+Task 5: Enable lifecycle management
+
+# View the current lifecycle policy
+    gsutil lifecycle get gs://$BUCKET_NAME_1
+
+# Create a JSON lifecycle policy file
+    nano life.json
+
+Paste the following value into the life.json file
+
+    {
+  "rule":
+  [
+    {
+      "action": {"type": "Delete"},
+      "condition": {"age": 31}
+    }
+  ]
+    }
+    Ctrl+o Enter, Ctrl+x
+
+# Set the policy and verify
+
+# Set the policy
+    gsutil lifecycle set life.json gs://$BUCKET_NAME_1
+
+# Verify the policy
+    gsutil lifecycle get gs://$BUCKET_NAME_1
+
+Task 6: Enable versioning
+
+# Current versioning status
+    gsutil versioning get gs://$BUCKET_NAME_1
+
+# Enable versioning
+    gsutil versioning set on gs://$BUCKET_NAME_1
+
+# Verify that versioning
+    gsutil versioning get gs://$BUCKET_NAME_1
+
+# Check the size of the sample file
+    ls -al setup.html
+
+# Open the setup.html file and delete some lines 
+    nano setup.html 
+
+    Ctrl+o Enter, Ctrl+x
+
+# Copy the file to the bucket with the -v versioning
+    gsutil cp setup.html -v gs://$BUCKET_NAME_1
+
+# Open the setup.html file and delete some lines 
+    nano setup.html 
+
+    Ctrl+o Enter, Ctrl+x
+
+# Copy the file to the bucket with the -v versioning
+    gsutil cp setup.html -v gs://$BUCKET_NAME_1
+
+# List all versions of the file
+    gsutil ls -a gs://$BUCKET_NAME_1
+
+# Store the version value in the environment variable [VERSION_NAME].
+    export VERSION_NAME= [VERSION_NAME]
+    echo VERSION_NAME
+
+# Download the original version of the file
+    gsutil cp $VERSION_NAME recovered.txt
+
+# Verify recovery
+    ls -al setup.html
+
+    ls -al recovered.txt
+
+Task 7: Synchronize a directory to a bucket
+
+# Make a nested directory and sync with a bucket
+    mkdir firstlevel
+    mkdir ./firstlevel/secondlevel
+    cp setup.html firstlevel
+    cp setup.html firstlevel/secondlevel
+
+# Sync the firstlevel directory on the VM with your bucket
+    gsutil rsync firstlevel gs://$BUCKET_NAME_1/firstlevel
+
+# Compare what you see in the Cloud Console
+    gsutil ls -r gs://§BUCKET_NAME_1/firstlevel
+
+    exit 
+
+Task 8: Cross-project sharing
+
+# Switch to the second project
+    gcloud config set project Second_project_id
+
+# Create bucket
+    gsutil mb gs://Second_project_id
+
+# Upload a file
+    gsutil cp  file.txt gs://Second_project_id
+
+Create an IAM Service Account
+    gcloud iam service-account create cross-project-storage
+
+# Grant the service account the permission 
+    gcloud projects add-iam-policy-binding my-project \
+    --member=cross-project-storage --role=storage-object-viewer 
+# Generate credentials 
+    gcloud iam service-accounts keys create ~/key.json \
+    --iam-account cross-project-storage
+
+# Rename the json file 
+    gsutil cp key.json credentials.json
+    gsutil rm key.json 
+
+
+# switch back to [PROJECT_ID_1]
+    gcloud config set project proiect_id_1
+Create a VM
+    gcloud compute instances create crossproject --region=europe-west1 --zone=europe-west1-d
+    --machine-type=n1-standard-1
+
+# ssh to the VM
+    gcloud compute ssh crossproject
+
+    export BUCKET_NAME_2=[BUCKET_NAME_2]
+    echo $BUCKET_NAME_2
+
+    export FILE_NAME=file.txt
+    echo $FILE_NAME
+
+#List the files in [PROJECT_ID_2]
+    gsutil ls gs://$BUCKET_NAME_2/
+
+# Upload file
+    ls
+
+# Authorize the VM to use the Google Cloud API
+    gcloud auth activate-service-account --key-file credentials.json
+
+# Verify access
+    gsutil ls gs://$BUCKET_NAME_2/
+
+    gsutil cat gs://$BUCKET_NAME_2/$FILE_NAME
+
+    gsutil cp credentials.json gs://$BUCKET_NAME_2/
+
+    exit 
+
+# Modify role
+    gcloud projects add-iam-policy-binding my-project \
+    --member=cross-project-storage --role=storage-object-admin
+
+# Verify changed access
+    gsutil cp credentials.json gs://$BUCKET_NAME_2/
+
+
+
+
+
